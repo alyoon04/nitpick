@@ -202,6 +202,33 @@ class TestWebhookRouting:
         assert resp.status_code == 200
         mock_pool.enqueue_job.assert_not_called()
 
+    @patch("nitpick.api.webhooks.get_pool")
+    @patch("nitpick.api.webhooks.verify_signature", return_value=True)
+    def test_bot_comment_ignored(self, _mock_sig, mock_get_pool, client):
+        """Bot's own replies should not trigger reply_task (prevents infinite loops)."""
+        mock_pool = AsyncMock()
+        mock_get_pool.return_value = mock_pool
+
+        payload = {
+            "action": "created",
+            "installation": {"id": 12345},
+            "repository": {"full_name": "octocat/hello-world"},
+            "pull_request": {"number": 42},
+            "comment": {
+                "id": 888,
+                "body": "Fair point, I concede.",
+                "user": {"login": "nitpick-reviewer[bot]", "type": "Bot"},
+                "in_reply_to_id": 555,
+            },
+        }
+        resp = client.post(
+            "/webhooks/github",
+            json=payload,
+            headers={"x-hub-signature-256": "sha256=test", "x-github-event": "pull_request_review_comment"},
+        )
+        assert resp.status_code == 200
+        mock_pool.enqueue_job.assert_not_called()
+
     @patch("nitpick.api.webhooks.verify_signature", return_value=False)
     def test_invalid_signature_returns_401(self, _mock_sig, client):
         payload = make_pr_payload()
