@@ -81,6 +81,9 @@ async def github_webhook(
         action = payload.get("action")
         if action == "created":
             comment = payload["comment"]
+            # Ignore bot's own comments to prevent infinite reply loops
+            if comment["user"].get("type") == "Bot":
+                return {"status": "ok"}
             # Only process replies (comments with in_reply_to_id)
             in_reply_to = comment.get("in_reply_to_id")
             if in_reply_to:
